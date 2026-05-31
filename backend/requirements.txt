@@ -1,0 +1,22 @@
+# API
+fastapi
+uvicorn
+
+# Base de datos
+motor
+pymongo
+
+# Configuración
+pydantic
+pydantic-settings
+python-dotenv
+
+# Autenticación
+python-jose[cryptography]
+passlib[bcrypt]
+
+# GitHub
+PyGithub
+httpx
+
+

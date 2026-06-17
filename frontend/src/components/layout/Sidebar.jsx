@@ -3,9 +3,9 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, GitBranch, Upload,
   FileText, MessageCircle, Settings,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, LogIn, LogOut, User,
 } from 'lucide-react'
-import LogoIcon from './LogoIcon'
+import AuthModal from './AuthModal'
 
 const NAV = [
   { href: '/',         label: 'Dashboard',       icon: LayoutDashboard },
@@ -77,6 +77,73 @@ const S = {
     color: active ? '#22c55e' : '#5a6b60',
     transition: 'background 0.12s, color 0.12s',
   }),
+  authRow: (collapsed) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: collapsed ? '10px 0' : '10px 10px',
+    borderTop: '1px solid #1e2420',
+    justifyContent: collapsed ? 'center' : 'flex-start',
+    overflow: 'hidden',
+  }),
+  loginBtn: (hovered, collapsed) => ({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: collapsed ? 'center' : 'flex-start',
+    gap: 9,
+    width: collapsed ? 'auto' : '100%',
+    padding: '7px 10px',
+    borderRadius: 8,
+    border: 'none',
+    background: hovered ? 'rgba(255,255,255,0.05)' : 'transparent',
+    color: hovered ? '#a0b0a6' : '#5a6b60',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'background 0.12s, color 0.12s',
+    whiteSpace: 'nowrap',
+  }),
+  avatar: {
+    width: 26,
+    height: 26,
+    borderRadius: '50%',
+    flexShrink: 0,
+    objectFit: 'cover',
+    border: '1px solid #1e2420',
+  },
+  avatarFallback: {
+    width: 26,
+    height: 26,
+    borderRadius: '50%',
+    flexShrink: 0,
+    background: 'rgba(34,197,94,0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  username: {
+    fontSize: 12,
+    color: '#a0b0a6',
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  logoutBtn: (hovered) => ({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    border: 'none',
+    background: hovered ? 'rgba(255,255,255,0.05)' : 'transparent',
+    color: hovered ? '#a0b0a6' : '#5a6b60',
+    cursor: 'pointer',
+    flexShrink: 0,
+    transition: 'background 0.12s, color 0.12s',
+  }),
   toggle: {
     display: 'flex',
     alignItems: 'center',
@@ -92,53 +159,126 @@ const S = {
 
 export default function Sidebar() {
   const { pathname } = useLocation()
-  const [collapsed, setCollapsed] = useState(false)
-  const [hovered, setHovered] = useState(null)
+  const [collapsed, setCollapsed]     = useState(false)
+  const [hovered, setHovered]         = useState(null)
+  const [user, setUser]               = useState(null)
+  const [showModal, setShowModal]     = useState(false)
+  const [loginHovered, setLoginHovered]   = useState(false)
+  const [logoutHovered, setLogoutHovered] = useState(false)
+
+  const handleLogout = async () => {
+    try {
+      if (user?.provider === 'google' || user?.provider === 'github') {
+        const { logout } = await import('../../lib/firebase')
+        await logout()
+      }
+    } finally {
+      setUser(null)
+    }
+  }
 
   return (
-    <aside style={S.aside(collapsed)}>
-      {/* Header */}
-      <div style={S.header}>
-        <div style={S.logo}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#052010" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
+    <>
+      <aside style={S.aside(collapsed)}>
+
+        {/* Header */}
+        <div style={S.header}>
+          <div style={S.logo}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+              stroke="#052010" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          {!collapsed && <span style={S.brandText}>CodeGuard</span>}
         </div>
-        {!collapsed && <span style={S.brandText}>CodeGuard</span>}
-      </div>
 
-      {/* Nav */}
-      <nav style={S.nav}>
-        {NAV.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href
-          const isHovered = hovered === href
-          return (
-            <Link
-              key={href}
-              to={href}
-              style={{
-                ...S.link(active),
-                ...(isHovered && !active ? { background: 'rgba(255,255,255,0.05)', color: '#a0b0a6' } : {}),
-              }}
-              onMouseEnter={() => setHovered(href)}
-              onMouseLeave={() => setHovered(null)}
+        {/* Nav */}
+        <nav style={S.nav}>
+          {NAV.map(({ href, label, icon: Icon }) => {
+            const active    = pathname === href
+            const isHovered = hovered === href
+            return (
+              <Link
+                key={href}
+                to={href}
+                style={{
+                  ...S.link(active),
+                  ...(isHovered && !active
+                    ? { background: 'rgba(255,255,255,0.05)', color: '#a0b0a6' }
+                    : {}),
+                }}
+                onMouseEnter={() => setHovered(href)}
+                onMouseLeave={() => setHovered(null)}
+              >
+                <Icon size={17} style={{ flexShrink: 0 }} />
+                {!collapsed && <span>{label}</span>}
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* Auth row */}
+        <div style={S.authRow(collapsed)}>
+          {user ? (
+            <>
+              {user.photo
+                ? <img src={user.photo} alt={user.username} style={S.avatar} />
+                : (
+                  <div style={S.avatarFallback}>
+                    <User size={13} color="#22c55e" />
+                  </div>
+                )
+              }
+              {!collapsed && (
+                <>
+                  <span style={S.username}>{user.username}</span>
+                  <button
+                    style={S.logoutBtn(logoutHovered)}
+                    title="Cerrar sesión"
+                    onClick={handleLogout}
+                    onMouseEnter={() => setLogoutHovered(true)}
+                    onMouseLeave={() => setLogoutHovered(false)}
+                  >
+                    <LogOut size={14} />
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <button
+              style={S.loginBtn(loginHovered, collapsed)}
+              onClick={() => setShowModal(true)}
+              onMouseEnter={() => setLoginHovered(true)}
+              onMouseLeave={() => setLoginHovered(false)}
             >
-              <Icon size={17} style={{ flexShrink: 0 }} />
-              {!collapsed && <span>{label}</span>}
-            </Link>
-          )
-        })}
-      </nav>
+              <LogIn size={17} style={{ flexShrink: 0 }} />
+              {!collapsed && <span>Iniciar sesión</span>}
+            </button>
+          )}
+        </div>
 
-      {/* Toggle */}
-      <button
-        style={S.toggle}
-        onClick={() => setCollapsed(c => !c)}
-        onMouseEnter={e => e.currentTarget.style.color = '#a0b0a6'}
-        onMouseLeave={e => e.currentTarget.style.color = '#5a6b60'}
-      >
-        {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
-      </button>
-    </aside>
+        {/* Toggle */}
+        <button
+          style={S.toggle}
+          onClick={() => setCollapsed(c => !c)}
+          onMouseEnter={e => e.currentTarget.style.color = '#a0b0a6'}
+          onMouseLeave={e => e.currentTarget.style.color = '#5a6b60'}
+        >
+          {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+        </button>
+
+      </aside>
+
+      {/* Modal — outside <aside> so it's not clipped */}
+      {showModal && (
+        <AuthModal
+          onClose={() => setShowModal(false)}
+          onSuccess={(u) => {
+            setUser(u)
+            setShowModal(false)
+          }}
+        />
+      )}
+    </>
   )
 }

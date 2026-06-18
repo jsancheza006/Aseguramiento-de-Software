@@ -8,6 +8,7 @@ pymongo
 
 # Configuración
 pydantic
+pydantic[email]
 pydantic-settings
 python-dotenv
 
@@ -18,5 +19,3 @@ passlib[bcrypt]
 # GitHub
 PyGithub
 httpx
-
-

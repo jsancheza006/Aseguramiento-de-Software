@@ -16,18 +16,20 @@ const firebaseConfig = {
   appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-const app  = initializeApp(firebaseConfig)
+const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 
 const googleProvider = new GoogleAuthProvider()
 const githubProvider = new GithubAuthProvider()
+githubProvider.addScope('repo')
+githubProvider.addScope('read:user')
 
 export async function loginWithGoogle() {
   const result = await signInWithPopup(auth, googleProvider)
   const u = result.user
   return {
     uid:      u.uid,
-    username: u.displayName ?? u.email?.split('@')[0] ?? 'User',
+    name:     u.displayName ?? u.email?.split('@')[0] ?? 'User',
     email:    u.email,
     photo:    u.photoURL,
     provider: 'google',
@@ -37,15 +39,24 @@ export async function loginWithGoogle() {
 export async function loginWithGitHub() {
   const result = await signInWithPopup(auth, githubProvider)
   const u = result.user
+  const credential = GithubAuthProvider.credentialFromResult(result)
+  const githubToken = credential?.accessToken
+
+  if (githubToken) {
+    localStorage.setItem('github_token', githubToken)
+  }
+
   return {
-    uid:      u.uid,
-    username: u.displayName ?? u.email?.split('@')[0] ?? 'User',
-    email:    u.email,
-    photo:    u.photoURL,
-    provider: 'github',
+    uid:         u.uid,
+    name:        u.displayName ?? u.email?.split('@')[0] ?? 'User',
+    email:       u.email,
+    photo:       u.photoURL,
+    provider:    'github',
+    githubToken: githubToken ?? null,
   }
 }
 
 export async function logout() {
+  localStorage.removeItem('github_token')
   await signOut(auth)
 }

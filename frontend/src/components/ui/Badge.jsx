@@ -1,4 +1,3 @@
-// variant cambia el color con CSS var
 const COLOR = {
   critical: 'var(--critical)',
   high:     'var(--high)',

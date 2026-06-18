@@ -12,7 +12,7 @@ db.createUser({
 
 
 // users 
-// email único para evitar duplicados en registro manual y OAuth
+// email unico para evitar duplicados en registro manual 
 db.createCollection("users");
 db.users.createIndex({ email: 1 },     { unique: true });
 db.users.createIndex({ github_id: 1 }, { unique: true, sparse: true }); 
@@ -54,7 +54,7 @@ db.chat_messages.createIndex({ session_id: 1, created_at: 1 });
 // code_embeddings 
 // Indice por repository_id para traer todos los chunks de un repo
 // Indice con file path para buscar un chunk específico por archivo y posicion
-// Hay que configurar el sistema vectorial para Atlas Vector Search desde la UI de Atlas o via Atlas CLI  no aplica en Docker local.
+// Hay que configurar el sistema vectorial para Atlas Vector Search desde la UI de Atlas o via Atlas CLI  no aplica en Docker local
 // En local la busqueda de similitud se hace en Python con coseno.
 db.createCollection("code_embeddings");
 db.code_embeddings.createIndex({ repository_id: 1 });

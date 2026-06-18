@@ -2,9 +2,9 @@ import Card from '../layout/Card'
 
 const DATA = [
   { label: 'Critical', count: 12,  color: 'var(--critical)' },
-  { label: 'High',     count: 48,  color: 'var(--high)' },
-  { label: 'Medium',   count: 156, color: 'var(--medium)' },
-  { label: 'Low',      count: 284, color: 'var(--low)' },
+  { label: 'High',     count: 48,  color: 'var(--high)'     },
+  { label: 'Medium',   count: 156, color: 'var(--medium)'   },
+  { label: 'Low',      count: 284, color: 'var(--low)'      },
 ]
 
 export default function SeverityBreakdown() {
@@ -19,7 +19,7 @@ export default function SeverityBreakdown() {
                 <span className="text-[13px]">{label}</span>
                 <span className="text-[11px] font-mono" style={{ color }}>{count}</span>
               </div>
-              <div className="h-1.5 bg-[var(--secondary)] rounded-full overflow-hidden">
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--secondary)' }}>
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${(count / 500) * 100}%`, background: color }}

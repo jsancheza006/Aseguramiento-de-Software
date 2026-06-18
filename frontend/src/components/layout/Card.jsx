@@ -1,6 +1,7 @@
 export default function Card({ title, description, titleIcon: Icon, children, className = '' }) {
   return (
-    <div className={`bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 ${className}`}>
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+      className={`rounded-xl p-5 ${className}`}>
       {(title || description) && (
         <div className="mb-4 flex flex-col gap-1">
           {title && (
@@ -9,7 +10,9 @@ export default function Card({ title, description, titleIcon: Icon, children, cl
               <span className="text-[14px] font-medium">{title}</span>
             </div>
           )}
-          {description && <p className="text-[13px] text-[var(--muted)]">{description}</p>}
+          {description && (
+            <p className="text-[13px]" style={{ color: 'var(--muted)' }}>{description}</p>
+          )}
         </div>
       )}
       {children}

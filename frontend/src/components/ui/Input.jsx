@@ -7,17 +7,16 @@ export default function Input({ placeholder, value, onChange, icon: Icon }) {
         </span>
       )}
 
-<input
-  className={[
-    'w-full h-10 bg-[var(--secondary)] border border-[var(--border)] rounded-md',
-    'text-[var(--fg)] text-[13px] placeholder:pl-8 font-mono placeholder:text-[var(--muted)]',
-    'focus:border-[var(--primary)] transition-colors',
-    Icon ? 'pl-20 pr-3' : 'px-3',
-  ].join(' ')}
-  placeholder={placeholder}
-  value={value}
-  onChange={onChange}
-/>
+      <input
+        className={[
+          "w-full h-10 bg-[var(--secondary)] border border-[var(--border)] rounded-md",
+          "text-[var(--fg)] text-[13px] font-mono placeholder:text-[var(--muted)]",
+          Icon ? "pl-7 pr-3" : "px-3",
+        ].join(" ")}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+      />
     </div>
   );
 }

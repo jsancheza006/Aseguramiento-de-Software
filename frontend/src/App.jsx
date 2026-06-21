@@ -2,6 +2,9 @@ import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
 import Sidebar from './components/layout/Sidebar'
 import Dashboard from './pages/Dashboard'
 import ScanRepository from './pages/ScanRepository'
+import UploadCode from './pages/UploadCode'
+import Reports from './pages/Reports'
+import Settings from './pages/Settings'
 
 function AppShell() {
   return (
@@ -19,8 +22,11 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
-          <Route path="/"     element={<Dashboard />} />
-          <Route path="/scan" element={<ScanRepository />} />
+          <Route path="/"         element={<Dashboard />} />
+          <Route path="/scan"     element={<ScanRepository />} />
+          <Route path="/upload"   element={<UploadCode />} />
+          <Route path="/reports"  element={<Reports />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

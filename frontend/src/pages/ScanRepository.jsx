@@ -15,11 +15,6 @@ export default function ScanRepository() {
   const [loadingRepos, setLoadingRepos] = useState(false)
 const hasGithub = !!user?.githubToken
 
-  console.log('user:', user)
-console.log('user.provider:', user?.provider)
-console.log('user.githubToken:', user?.githubToken)
-console.log('localStorage github_token:', localStorage.getItem('github_token'))
-console.log('hasGithub:', user?.provider === 'github' && !!user?.githubToken)
   useEffect(() => {
     if (!hasGithub) {
       setRepos([])
@@ -28,7 +23,6 @@ console.log('hasGithub:', user?.provider === 'github' && !!user?.githubToken)
     setLoadingRepos(true)
     githubApi.get('/api/github/repos')
   .then(data => {
-    console.log('repos response:', data)        // ← mirá esto en consola
     setRepos(Array.isArray(data) ? data : data.repos ?? [])
   })
   .catch(console.error)

@@ -4,6 +4,8 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   GithubAuthProvider,
+  fetchSignInMethodsForEmail,
+  linkWithCredential,
   signOut,
 } from 'firebase/auth'
 
@@ -24,35 +26,64 @@ const githubProvider = new GithubAuthProvider()
 githubProvider.addScope('repo')
 githubProvider.addScope('read:user')
 
-export async function loginWithGoogle() {
-  const result = await signInWithPopup(auth, googleProvider)
-  const u = result.user
+function buildUserPayload(user, provider, githubToken = null) {
   return {
-    uid:      u.uid,
-    name:     u.displayName ?? u.email?.split('@')[0] ?? 'User',
-    email:    u.email,
-    photo:    u.photoURL,
-    provider: 'google',
+    uid:      user.uid,
+    name:     user.displayName ?? user.email?.split('@')[0] ?? 'User',
+    email:    user.email,
+    photo:    user.photoURL,
+    provider,
+    ...(githubToken && { githubToken }),
   }
 }
 
 export async function loginWithGitHub() {
-  const result = await signInWithPopup(auth, githubProvider)
-  const u = result.user
-  const credential = GithubAuthProvider.credentialFromResult(result)
-  const githubToken = credential?.accessToken
+  try {
+    const result = await signInWithPopup(auth, githubProvider)
+    const credential = GithubAuthProvider.credentialFromResult(result)
+    const githubToken = credential?.accessToken
+    if (githubToken) localStorage.setItem('github_token', githubToken)
+    return buildUserPayload(result.user, 'github', githubToken)
 
-  if (githubToken) {
-    localStorage.setItem('github_token', githubToken)
+  } catch (error) {
+    if (error.code !== 'auth/account-exists-with-different-credential') throw error
+
+    const pendingCredential = GithubAuthProvider.credentialFromError(error)
+    const existingProvider = error.customData?._tokenResponse?.verifiedProvider?.[0]
+
+    if (existingProvider === 'google.com') {
+      const googleResult = await signInWithPopup(auth, googleProvider)
+      const linkedResult = await linkWithCredential(googleResult.user, pendingCredential)
+
+      const linkedCredential = GithubAuthProvider.credentialFromResult(linkedResult)
+      const githubToken = linkedCredential?.accessToken
+      if (githubToken) localStorage.setItem('github_token', githubToken)
+
+      return buildUserPayload(linkedResult.user, 'github', githubToken)
+    }
+
+    throw error
   }
+}
 
-  return {
-    uid:         u.uid,
-    name:        u.displayName ?? u.email?.split('@')[0] ?? 'User',
-    email:       u.email,
-    photo:       u.photoURL,
-    provider:    'github',
-    githubToken: githubToken ?? null,
+export async function loginWithGoogle() {
+  try {
+    const result = await signInWithPopup(auth, googleProvider)
+    return buildUserPayload(result.user, 'google')
+
+  } catch (error) {
+    if (error.code !== 'auth/account-exists-with-different-credential') throw error
+
+    const pendingCredential = GoogleAuthProvider.credentialFromError(error)
+    const existingProvider = error.customData?._tokenResponse?.verifiedProvider?.[0]
+
+    if (existingProvider === 'github.com') {
+      const githubResult = await signInWithPopup(auth, githubProvider)
+      await linkWithCredential(githubResult.user, pendingCredential)
+      return buildUserPayload(githubResult.user, 'google')
+    }
+
+    throw error
   }
 }
 

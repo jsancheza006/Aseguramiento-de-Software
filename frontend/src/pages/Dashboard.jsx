@@ -1,46 +1,167 @@
-import { Link } from 'react-router-dom'
-import { Shield, AlertTriangle, GitBranch, Clock, Zap } from 'lucide-react'
-import StatCard from '../components/dashboard/StatCard'
-import SeverityBreakdown from '../components/dashboard/SeverityBreakdown'
-import ActivityList from '../components/dashboard/ActivityList'
-
-const STATS = [
-  { label: 'Total Scans',           value: '1,284', icon: Shield,        trend: '+12%'  },
-  { label: 'Vulnerabilities Found', value: '3,421', icon: AlertTriangle, trend: '-8%'   },
-  { label: 'Repositories',          value: '47',    icon: GitBranch,     trend: '+3'    },
-  { label: 'Avg Scan Time',         value: '2.4s',  icon: Clock,         trend: '-0.3s' },
-]
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Shield, AlertTriangle, GitBranch, Clock, Zap } from "lucide-react";
+import StatCard from "../components/dashboard/StatCard";
+import SeverityBreakdown from "../components/dashboard/SeverityBreakdown";
+import ActivityList from "../components/dashboard/ActivityList";
+import { api } from "../config/Api";
+import { useAuth } from "../context/AuthContext";
+import { formatTime } from "../lib/date";
 
 export default function Dashboard() {
-  return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24, width: '100%', boxSizing: 'border-box' }}>
+  const location = useLocation();
+  const { user } = useAuth();
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+  // Resultados que vienen del scan
+  const incomingScan = location.state?.results ?? null;
+
+  const [scanData, setScanData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) {
+      setScanData(null);
+      setLoading(false);
+      return;
+    }
+
+    if (incomingScan) {
+      setScanData(incomingScan);
+      setLoading(false);
+      window.history.replaceState({}, "");
+      return;
+    }
+
+    setLoading(true);
+    api
+      .get("/api/scan/latest")
+      .then((data) => {
+        console.log("completed_at raw:", data.completed_at);
+        setScanData(data);
+      })
+      .catch(() => setScanData(null))
+      .finally(() => setLoading(false));
+  }, [incomingScan, user]);
+
+  // Stats para los componentes
+  const metrics = scanData?.metrics ?? {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+  };
+  const total = Object.values(metrics).reduce((a, b) => a + b, 0);
+  const score = scanData?.security_score ?? null;
+  const repoName = scanData?.repo_name ?? "—";
+
+  const STATS = [
+    {
+      label: "Security Score",
+      value: score !== null ? `${score}/100` : "—",
+      icon: Shield,
+      trend:
+        score !== null
+          ? score >= 70
+            ? "Good"
+            : score >= 40
+              ? "Fair"
+              : "Critical"
+          : "",
+    },
+    {
+      label: "Vulnerabilities",
+      value: total > 0 ? total.toString() : "0",
+      icon: AlertTriangle,
+      trend: `${metrics.critical} critical`,
+    },
+    {
+      label: "Repository",
+      value: repoName,
+      icon: GitBranch,
+      trend: "",
+    },
+    {
+      label: "Last scan",
+      value: scanData?.completed_at ? formatTime(scanData.completed_at) : "—",
+      icon: Clock,
+      trend: "",
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div style={{ padding: 24, color: "var(--muted)", fontSize: 13 }}>
+        Loading...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        padding: 24,
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+        width: "100%",
+        boxSizing: "border-box",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 600 }}>Dashboard</h1>
-          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Security overview and recent activity</p>
+          <h1 style={{ fontSize: 22, fontWeight: 600 }}>
+            {scanData ? `${repoName}` : "Dashboard"}
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
+            {scanData?.summary ?? "Security overview and recent activity"}
+          </p>
         </div>
         <Link to="/scan">
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '8px 16px', borderRadius: 8,
-            background: 'var(--primary)', color: 'var(--primary-fg)',
-            fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
-          }}>
-            <Zap size={14} /> Quick Scan
+          <button
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 16px",
+              borderRadius: 8,
+              background: "var(--primary)",
+              color: "var(--primary-fg)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              border: "none",
+            }}
+          >
+            <Zap size={14} /> New Scan
           </button>
         </Link>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        {STATS.map((s) => <StatCard key={s.label} {...s} />)}
+      {/* Stat cards */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 16,
+        }}
+      >
+        {STATS.map((s) => (
+          <StatCard key={s.label} {...s} />
+        ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        <SeverityBreakdown />
-        <ActivityList />
+      {/* Breakdown + activity */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <SeverityBreakdown metrics={metrics} />
+        <ActivityList scanData={scanData} />
       </div>
-
     </div>
-  )
+  );
 }

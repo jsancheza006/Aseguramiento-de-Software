@@ -3,9 +3,6 @@ import { GitBranch, ChevronRight, Loader2 } from 'lucide-react'
 export default function RecentRepos({ repos, loading, hasGithub, onSelect }) {
   return (
     <div style={{ background: '#0d100e', border: '1px solid #1e2420', borderRadius: 12, padding: 24 }}>
-      <p style={{ fontSize: 11, fontWeight: 600, color: '#3a4a3f', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 12, marginTop: 0 }}>
-        {hasGithub ? 'Your repositories' : 'Recent repositories'}
-      </p>
 
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0', color: '#5a6b60', fontSize: 13 }}>

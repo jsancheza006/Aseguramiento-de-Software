@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from app.config import settings
 from jose import jwt
 
-SECRET_KEY = "aca la clave"  #nada de esto funcional
+SECRET_KEY = settings.SECRET_KEY
 ALGORITHM  = "HS256"
 EXPIRE_MIN = 60 * 24 * 7  
 

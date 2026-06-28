@@ -4,7 +4,7 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status
 
 from app.core.security import create_access_token
-from app.schemas.auth import RegisterRequest, LoginRequest, OAuthRequest, UserOut, AuthResponse
+from app.database.schemas.auth import RegisterRequest, LoginRequest, OAuthRequest, UserOut, AuthResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

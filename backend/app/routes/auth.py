@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.schemas.auth import RegisterRequest, LoginRequest, OAuthRequest, AuthResponse, UserOut
+from app.database.schemas.auth import RegisterRequest, LoginRequest, OAuthRequest, AuthResponse, UserOut
 from app.services.auth_service import register_user, login_user, oauth_user
 from app.core.deps import get_current_user
 from app.database.connection import get_db

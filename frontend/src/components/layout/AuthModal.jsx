@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Shield, Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react'
 import { loginWithGoogle, loginWithGitHub } from '../../lib/firebase'
-import { authService } from '../../config/authService'
+import { authService } from '../../config/Api'
 import { useAuth } from '../../context/AuthContext'
 
 const GoogleIcon = () => (

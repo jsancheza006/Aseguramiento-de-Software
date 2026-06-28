@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
-import Sidebar from './components/layout/Sidebar'
+import Sidebar from './components/sidebar/Sidebar'
 import Dashboard from './pages/Dashboard'
 import ScanRepository from './pages/ScanRepository'
 import UploadCode from './pages/UploadCode'

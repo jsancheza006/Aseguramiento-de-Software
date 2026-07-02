@@ -9,7 +9,7 @@ db.createUser({
   roles: [{ role: "readWrite", db: "ai_secure_qa" }]
 });
 
-
+// test
 
 // users 
 // email unico para evitar duplicados en registro manual 

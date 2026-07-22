@@ -23,3 +23,5 @@ httpx
 
 #Frameworks
 Bandit
+semgrep
+checkov

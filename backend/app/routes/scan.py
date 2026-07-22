@@ -1,19 +1,29 @@
 import re
-from fastapi import APIRouter, HTTPException, Depends, Body
+from urllib.parse import urlparse
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Body
 from pydantic import BaseModel, ValidationError, field_validator
-from bson.errors import InvalidId
-from app.services.scanner_service import start_scan, get_scan_status, get_scan_results
+from app.services.scanner_service import (
+    start_scan,
+    start_scan_from_upload,
+    start_scan_from_paste,
+    get_scan_status,
+    get_scan_results,
+    get_latest_scan,
+    get_vulnerability,
+)
 from app.core.deps import get_current_user
 from app.core.logger import logger
-from app.database.connection import get_db
-from bson import ObjectId
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
-# Acepta URLs HTTPS o SSH de GitHub, con o sin sufijo .git
-GITHUB_URL_PATTERN = re.compile(
-    r"^(https://github\.com/[\w.-]+/[\w.-]+(\.git)?/?|git@github\.com:[\w.-]+/[\w.-]+\.git)$"
-)
+# Whitelist de hosts permitidos para clonar. Sin esto, clone_url llega directo
+# a `git clone <url>` en fetch_repo: alguien podria mandar file:///etc/passwd,
+# http://localhost:<puerto-interno>, o una IP de metadata cloud (169.254.169.254)
+# y usar el scanner como proxy para leer archivos locales o pegarle a servicios
+# internos (SSRF). Ajustar esta lista si necesitan soportar mas proveedores
+# (Bitbucket, un GitLab self-hosted, etc).
+ALLOWED_GIT_HOSTS = {"github.com", "gitlab.com"}
+
 BRANCH_PATTERN = re.compile(r"^[\w][\w./-]{0,99}$")
 REPO_NAME_PATTERN = re.compile(r"^[\w.-]{1,100}$")
 
@@ -26,12 +36,13 @@ class ScanRequest(BaseModel):
     @field_validator("clone_url")
     @classmethod
     def validate_clone_url(cls, v: str) -> str:
-        if not v or not GITHUB_URL_PATTERN.match(v.strip()):
-            raise ValueError(
-                "clone_url debe ser una URL válida de GitHub "
-                "(https://github.com/usuario/repo o git@github.com:usuario/repo.git)"
-            )
-        return v.strip()
+        parsed = urlparse(v)
+        if parsed.scheme != "https":
+            raise ValueError("clone_url debe usar https://")
+        host = (parsed.hostname or "").lower()
+        if host not in ALLOWED_GIT_HOSTS:
+            raise ValueError(f"Host no permitido: {host}. Permitidos: {', '.join(ALLOWED_GIT_HOSTS)}")
+        return v
 
     @field_validator("branch")
     @classmethod
@@ -50,6 +61,11 @@ class ScanRequest(BaseModel):
         return v
 
 
+class PasteRequest(BaseModel):
+    code:     str
+    filename: str = "pasted_code.py"
+
+
 def _format_validation_errors(exc: ValidationError) -> str:
     #Convierte los errores de Pydantic en un mensaje legible para el cliente
     return "; ".join(err["msg"] for err in exc.errors())
@@ -57,13 +73,11 @@ def _format_validation_errors(exc: ValidationError) -> str:
 
 @router.post("/start")
 async def start_scan_endpoint(payload: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    # Inicia un scan clonando un repo de GitHub/GitLab
     try:
         body = ScanRequest(**payload)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=_format_validation_errors(e))
-
-    if not body.clone_url:
-        raise HTTPException(status_code=400, detail="clone_url es requerido")
 
     repo_name = body.repo_name or body.clone_url.rstrip("/").split("/")[-1].replace(".git", "")
 
@@ -84,22 +98,56 @@ async def start_scan_endpoint(payload: dict = Body(...), current_user: dict = De
     return {"scan_id": scan_id, "status": "running"}
 
 
+@router.post("/upload")
+async def upload_scan_endpoint(
+    files: list[UploadFile] = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    # Inicia un scan a partir de archivos subidos
+    try:
+        scan_id = await start_scan_from_upload(files, user_id=str(current_user["_id"]))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error iniciando scan desde upload: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo procesar el upload por un error interno. Intenta nuevamente más tarde.",
+        )
+    return {"scan_id": scan_id, "status": "running"}
+
+
+@router.post("/paste")
+async def paste_scan_endpoint(body: PasteRequest, current_user: dict = Depends(get_current_user)):
+    # Inicia un scan a partir de codigo pegado
+    try:
+        scan_id = await start_scan_from_paste(body.code, body.filename, user_id=str(current_user["_id"]))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error iniciando scan desde paste: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo procesar el código pegado por un error interno. Intenta nuevamente más tarde.",
+        )
+    return {"scan_id": scan_id, "status": "running"}
+
+
 @router.get("/latest")
 async def latest_scan_endpoint(current_user: dict = Depends(get_current_user)):
-    #Retorna el ultimo scan completado del usuario
-    db = get_db()
-    scan = await db["scans"].find_one(
-        {"user_id": str(current_user["_id"]), "status": "completed"},
-        sort=[("completed_at", -1)],
-    )
-    if not scan:
+    # Devuelve el ultimo scan completado del usuario
+    result = await get_latest_scan(user_id=str(current_user["_id"]))
+    if not result:
         raise HTTPException(status_code=404, detail="No hay scans completados")
+    return result
 
-    scan_id = str(scan["_id"])
-    return await get_scan_results(scan_id)
 
 @router.get("/history")
 async def scan_history_endpoint(current_user: dict = Depends(get_current_user)):
+    # Devuelve el historial de scans del usuario con metricas resumidas
+    from app.database.connection import get_db
+    from bson import ObjectId
+
     db = get_db()
     cursor = db["scans"].find(
         {"user_id": str(current_user["_id"])},
@@ -109,8 +157,7 @@ async def scan_history_endpoint(current_user: dict = Depends(get_current_user)):
     async for scan in cursor:
         repo = await db["repositories"].find_one({"_id": ObjectId(scan["repository_id"])})
         vuln_counts = await db["vulnerabilities"].count_documents({"scan_id": str(scan["_id"])})
-        
-        # Obtener severidades únicas presentes
+
         pipeline = [
             {"$match": {"scan_id": str(scan["_id"])}},
             {"$group": {"_id": "$severity"}},
@@ -118,10 +165,13 @@ async def scan_history_endpoint(current_user: dict = Depends(get_current_user)):
         severity_docs = await db["vulnerabilities"].aggregate(pipeline).to_list(length=10)
         severities = [d["_id"] for d in severity_docs if d["_id"]]
 
+        branch = repo["github_metadata"]["branch"] if repo and repo.get("github_metadata") else None
+
         scans.append({
             "scan_id":        str(scan["_id"]),
             "repo_name":      repo["name"] if repo else "Unknown",
-            "branch":         repo["github_metadata"]["branch"] if repo else "main",
+            "branch":         branch,
+            "source_type":    repo["source_type"] if repo else "unknown",
             "status":         scan["status"],
             "security_score": scan.get("security_score"),
             "metrics":        scan.get("metrics"),
@@ -132,16 +182,12 @@ async def scan_history_endpoint(current_user: dict = Depends(get_current_user)):
         })
     return scans
 
+
 @router.get("/{scan_id}/status")
 async def scan_status_endpoint(scan_id: str, current_user: dict = Depends(get_current_user)):
-    try:
-        result = await get_scan_status(scan_id)
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="scan_id tiene un formato inválido")
-    except Exception as e:
-        logger.error(f"Error consultando estado del scan {scan_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error interno al consultar el estado del scan.")
-
+    # Estado actual del scan para hacer polling
+    # que el scan pertenezca a current_user
+    result = await get_scan_status(scan_id, user_id=str(current_user["_id"]))
     if not result:
         raise HTTPException(status_code=404, detail="Scan no encontrado")
     return result
@@ -149,17 +195,24 @@ async def scan_status_endpoint(scan_id: str, current_user: dict = Depends(get_cu
 
 @router.get("/{scan_id}/results")
 async def scan_results_endpoint(scan_id: str, current_user: dict = Depends(get_current_user)):
-    try:
-        result = await get_scan_results(scan_id)
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="scan_id tiene un formato inválido")
-    except Exception as e:
-        logger.error(f"Error consultando resultados del scan {scan_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error interno al consultar los resultados del scan.")
-
+    # Resultado final del scan con vulnerabilidades
+    result = await get_scan_results(scan_id, user_id=str(current_user["_id"]))
     if not result:
         raise HTTPException(status_code=404, detail="Scan no encontrado")
     if result["status"] == "running":
         raise HTTPException(status_code=202, detail="Scan todavía en progreso")
     return result
 
+
+@router.get("/{scan_id}/vulnerabilities/{vuln_id}")
+async def vulnerability_detail_endpoint(
+    scan_id: str,
+    vuln_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    # Detalle de UNA vulnerabilidad puntual, validar si traer todas para mayor contexto
+    # traer todo get_scan_results solo para abrir el detalle de un finding).
+    vuln = await get_vulnerability(scan_id, vuln_id, user_id=str(current_user["_id"]))
+    if not vuln:
+        raise HTTPException(status_code=404, detail="Vulnerabilidad no encontrada")
+    return vuln

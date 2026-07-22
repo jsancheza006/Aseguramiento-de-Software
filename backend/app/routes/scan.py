@@ -38,10 +38,13 @@ class ScanRequest(BaseModel):
     def validate_clone_url(cls, v: str) -> str:
         parsed = urlparse(v)
         if parsed.scheme != "https":
-            raise ValueError("clone_url debe usar https://")
+            raise ValueError("La URL del repositorio debe empezar con https://")
         host = (parsed.hostname or "").lower()
         if host not in ALLOWED_GIT_HOSTS:
-            raise ValueError(f"Host no permitido: {host}. Permitidos: {', '.join(ALLOWED_GIT_HOSTS)}")
+            raise ValueError(
+                f"'{host}' no es un proveedor soportado. Usá un repositorio de "
+                f"{' o '.join(sorted(ALLOWED_GIT_HOSTS))}."
+            )
         return v
 
     @field_validator("branch")
@@ -68,7 +71,9 @@ class PasteRequest(BaseModel):
 
 def _format_validation_errors(exc: ValidationError) -> str:
     #Convierte los errores de Pydantic en un mensaje legible para el cliente
-    return "; ".join(err["msg"] for err in exc.errors())
+    # Pydantic antepone "Value error, " a los ValueError de los field_validator
+    messages = (err["msg"].removeprefix("Value error, ") for err in exc.errors())
+    return "; ".join(messages)
 
 
 @router.post("/start")

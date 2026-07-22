@@ -80,18 +80,32 @@ export default function Dropzone({ onFilesAdded, onError }) {
     (fileList) => {
       const files = Array.from(fileList);
       const valid = [];
-      const errors = [];
+      const unsupported = [];
+      const tooLarge = [];
       for (const file of files) {
         const ext = getExtension(file.name);
         if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-          errors.push(`${file.name}: extensión no soportada`);
+          unsupported.push(file.name);
           continue;
         }
         if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-          errors.push(`${file.name}: supera ${MAX_FILE_SIZE_MB}MB`);
+          tooLarge.push(file.name);
           continue;
         }
         valid.push(file);
+      }
+
+      const errors = [];
+      if (unsupported.length) {
+        errors.push(
+          `${unsupported.length === 1 ? "Este archivo no tiene" : `Estos ${unsupported.length} archivos no tienen`} una extensión soportada: ${unsupported.join(", ")}. ` +
+          `Formatos permitidos: ${SUPPORTED_EXTENSIONS.join(", ")}`
+        );
+      }
+      if (tooLarge.length) {
+        errors.push(
+          `${tooLarge.length === 1 ? "Este archivo supera" : `Estos ${tooLarge.length} archivos superan`} el máximo de ${MAX_FILE_SIZE_MB}MB: ${tooLarge.join(", ")}`
+        );
       }
       if (errors.length) onError?.(errors);
       if (valid.length) onFilesAdded?.(valid);

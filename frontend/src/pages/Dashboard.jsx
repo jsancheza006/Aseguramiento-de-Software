@@ -144,6 +144,32 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {/* Alert for unsupported languages */}
+      {scanData?.summary?.startsWith("⚠️ Alerta") && (
+        <div
+          style={{
+            padding: "16px",
+            borderRadius: "8px",
+            background: "rgba(234, 179, 8, 0.1)",
+            border: "1px solid rgba(234, 179, 8, 0.2)",
+            color: "#ca8a04",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "12px",
+          }}
+        >
+          <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: "2px" }} />
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, marginBottom: 4 }}>
+              Unsupported Language
+            </h3>
+            <p style={{ fontSize: 13, margin: 0, lineHeight: 1.4 }}>
+              {scanData.summary.replace("⚠️ Alerta: ", "")}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Stat cards */}
       <div
         style={{

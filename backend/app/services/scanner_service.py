@@ -1,10 +1,11 @@
+import time
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.database.connection import get_db
 from app.services.repo_fetcher_service import fetch_repo, cleanup_repo
 from app.scanners.scan_orchestrator import run_scan
 from app.scanners.normalizer import compute_metrics, compute_security_score
-from app.core.logger import logger
+from app.core.logger import logger, log_analysis_event
 
 
 async def _emit_event(db, scan_id: str, event_type: str, message: str):
@@ -81,6 +82,7 @@ async def start_scan(
 async def _run_scan_task(db, scan_id: str, repository_id: str, clone_url: str, branch: str, repo_name: str):
     # Ejecuta el scan completo y actualiza la DB
     repo_path = None
+    start_time = time.monotonic()
     try:
         await _emit_event(db, scan_id, "progress", f"Clonando {repo_name} rama {branch}...")
 
@@ -93,7 +95,7 @@ async def _run_scan_task(db, scan_id: str, repository_id: str, clone_url: str, b
         await _emit_event(db, scan_id, "progress", "Detectando lenguajes y ejecutando scanners...")
 
         # Escanear
-        vulns = await loop.run_in_executor(None, run_scan, repo_path, repository_id, scan_id)
+        vulns, languages = await loop.run_in_executor(None, run_scan, repo_path, repository_id, scan_id)
 
         await _emit_event(db, scan_id, "progress", "Calculando métricas y generando reporte...")
 
@@ -108,12 +110,17 @@ async def _run_scan_task(db, scan_id: str, repository_id: str, clone_url: str, b
         metrics = compute_metrics(vulns)
         score   = compute_security_score(metrics)
         total   = sum(metrics.values())
-        summary = (
-            f"Se detectaron {total} vulnerabilidades en {repo_name}: "
-            f"{metrics['critical']} críticas, {metrics['high']} altas, "
-            f"{metrics['medium']} medias, {metrics['low']} bajas. "
-            f"Score de seguridad: {score}/100."
-        )
+        
+        if "python" not in languages:
+            summary = "⚠️ Alerta: No se puede analizar el archivo ya que no tiene código Python. Estamos trabajando para próximamente soportar más lenguajes."
+            score = None
+        else:
+            summary = (
+                f"Se detectaron {total} vulnerabilidades en {repo_name}: "
+                f"{metrics['critical']} críticas, {metrics['high']} altas, "
+                f"{metrics['medium']} medias, {metrics['low']} bajas. "
+                f"Score de seguridad: {score}/100."
+            )
 
         completed_at = datetime.now(timezone.utc)
         await db["scans"].update_one(
@@ -130,6 +137,13 @@ async def _run_scan_task(db, scan_id: str, repository_id: str, clone_url: str, b
 
         await _emit_event(db, scan_id, "completed", f"Scan completado — {total} vulnerabilidades encontradas")
         logger.info(f"Scan {scan_id} completado: {total} vulns, score {score}")
+        log_analysis_event(
+            origin="github",
+            analysis_id=scan_id,
+            language=",".join(languages) if languages else None,
+            duration_seconds=time.monotonic() - start_time,
+            result="success",
+        )
 
     except Exception as e:
         logger.error(f"Scan {scan_id} falló: {e}", exc_info=True)
@@ -138,6 +152,14 @@ async def _run_scan_task(db, scan_id: str, repository_id: str, clone_url: str, b
             {"$set": {"status": "failed", "completed_at": datetime.now(timezone.utc)}},
         )
         await _emit_event(db, scan_id, "failed", f"Error durante el scan: {str(e)}")
+        log_analysis_event(
+            origin="github",
+            analysis_id=scan_id,
+            language=None,
+            duration_seconds=time.monotonic() - start_time,
+            result="failed",
+            error=str(e),
+        )
 
     finally:
         if repo_path:

@@ -1,11 +1,21 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+import re
+from fastapi import APIRouter, HTTPException, Depends, Body
+from pydantic import BaseModel, ValidationError, field_validator
+from bson.errors import InvalidId
 from app.services.scanner_service import start_scan, get_scan_status, get_scan_results
 from app.core.deps import get_current_user
+from app.core.logger import logger
 from app.database.connection import get_db
 from bson import ObjectId
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
+
+# Acepta URLs HTTPS o SSH de GitHub, con o sin sufijo .git
+GITHUB_URL_PATTERN = re.compile(
+    r"^(https://github\.com/[\w.-]+/[\w.-]+(\.git)?/?|git@github\.com:[\w.-]+/[\w.-]+\.git)$"
+)
+BRANCH_PATTERN = re.compile(r"^[\w][\w./-]{0,99}$")
+REPO_NAME_PATTERN = re.compile(r"^[\w.-]{1,100}$")
 
 
 class ScanRequest(BaseModel):
@@ -13,20 +23,64 @@ class ScanRequest(BaseModel):
     branch:    str = "main"
     repo_name: str = ""
 
+    @field_validator("clone_url")
+    @classmethod
+    def validate_clone_url(cls, v: str) -> str:
+        if not v or not GITHUB_URL_PATTERN.match(v.strip()):
+            raise ValueError(
+                "clone_url debe ser una URL válida de GitHub "
+                "(https://github.com/usuario/repo o git@github.com:usuario/repo.git)"
+            )
+        return v.strip()
+
+    @field_validator("branch")
+    @classmethod
+    def validate_branch(cls, v: str) -> str:
+        v = (v or "").strip() or "main"
+        if not BRANCH_PATTERN.match(v):
+            raise ValueError("branch tiene un formato inválido")
+        return v
+
+    @field_validator("repo_name")
+    @classmethod
+    def validate_repo_name(cls, v: str) -> str:
+        v = (v or "").strip()
+        if v and not REPO_NAME_PATTERN.match(v):
+            raise ValueError("repo_name tiene un formato inválido")
+        return v
+
+
+def _format_validation_errors(exc: ValidationError) -> str:
+    #Convierte los errores de Pydantic en un mensaje legible para el cliente
+    return "; ".join(err["msg"] for err in exc.errors())
+
 
 @router.post("/start")
-async def start_scan_endpoint(body: ScanRequest, current_user: dict = Depends(get_current_user)):
+async def start_scan_endpoint(payload: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    try:
+        body = ScanRequest(**payload)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=_format_validation_errors(e))
+
     if not body.clone_url:
         raise HTTPException(status_code=400, detail="clone_url es requerido")
 
     repo_name = body.repo_name or body.clone_url.rstrip("/").split("/")[-1].replace(".git", "")
 
-    scan_id = await start_scan(
-        clone_url=body.clone_url,
-        branch=body.branch,
-        repo_name=repo_name,
-        user_id=str(current_user["_id"]),
-    )
+    try:
+        scan_id = await start_scan(
+            clone_url=body.clone_url,
+            branch=body.branch,
+            repo_name=repo_name,
+            user_id=str(current_user["_id"]),
+        )
+    except Exception as e:
+        logger.error(f"Error iniciando scan para {body.clone_url}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo iniciar el scan por un error interno. Intenta nuevamente más tarde.",
+        )
+
     return {"scan_id": scan_id, "status": "running"}
 
 
@@ -80,7 +134,14 @@ async def scan_history_endpoint(current_user: dict = Depends(get_current_user)):
 
 @router.get("/{scan_id}/status")
 async def scan_status_endpoint(scan_id: str, current_user: dict = Depends(get_current_user)):
-    result = await get_scan_status(scan_id)
+    try:
+        result = await get_scan_status(scan_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="scan_id tiene un formato inválido")
+    except Exception as e:
+        logger.error(f"Error consultando estado del scan {scan_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error interno al consultar el estado del scan.")
+
     if not result:
         raise HTTPException(status_code=404, detail="Scan no encontrado")
     return result
@@ -88,7 +149,14 @@ async def scan_status_endpoint(scan_id: str, current_user: dict = Depends(get_cu
 
 @router.get("/{scan_id}/results")
 async def scan_results_endpoint(scan_id: str, current_user: dict = Depends(get_current_user)):
-    result = await get_scan_results(scan_id)
+    try:
+        result = await get_scan_results(scan_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="scan_id tiene un formato inválido")
+    except Exception as e:
+        logger.error(f"Error consultando resultados del scan {scan_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error interno al consultar los resultados del scan.")
+
     if not result:
         raise HTTPException(status_code=404, detail="Scan no encontrado")
     if result["status"] == "running":

@@ -100,6 +100,10 @@ export default function ScanRepository() {
 
   const handleScan = async () => {
     if (!url || scanning) return;
+    if (!user) {
+      setError("Debes iniciar sesión para realizar un escaneo.");
+      return;
+    }
     setError(null);
     setScanning(true);
     setProgress(2);

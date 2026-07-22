@@ -34,7 +34,7 @@ def detect_languages(repo_path: str) -> list[str]:
     return langs
 
 
-def run_scan(repo_path: str, repository_id: str, scan_id: str) -> list[dict]:
+def run_scan(repo_path: str, repository_id: str, scan_id: str) -> tuple[list[dict], list[str]]:
     #Corre la carpeta de los engines disponibles segun los lenguajes 
 
     languages = detect_languages(repo_path)
@@ -51,4 +51,4 @@ def run_scan(repo_path: str, repository_id: str, scan_id: str) -> list[dict]:
 
     # Aca debn ir mas Frameworks
     # if "javascript" in languages run_semgrep etc
-    return all_vulns
+    return all_vulns, languages

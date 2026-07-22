@@ -7,7 +7,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.routes.auth import router as auth_router
 from app.routes.github import router as github_router
-from app.routes.scan import router as scan_router       
+from app.routes.scan import router as scan_router
+from app.routes.upload import router as upload_router
 from app.database.connection import connect_db, close_db
 
 CORS_ORIGIN = "http://localhost:5173"
@@ -50,7 +51,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 app.include_router(auth_router)
 app.include_router(github_router)
-app.include_router(scan_router)                            
+app.include_router(scan_router)
+app.include_router(upload_router)
 
 
 @app.get("/health")

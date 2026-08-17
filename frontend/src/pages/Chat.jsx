@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { MessageSquareText } from 'lucide-react'
 import ContextPanel from '../components/chat/ContextPanel'
+import HistoryPanel from '../components/chat/HistoryPanel'
 import ChatMessage from '../components/chat/ChatMessage'
 import ChatInput from '../components/chat/ChatInput'
 import TypingIndicator from '../components/chat/TypingIndicator'
@@ -226,7 +227,7 @@ export default function Chat() {
         </span>
       </div>
 
-      <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', gap: 16, minHeight: 620 }}>
         <ContextPanel
           scans={scans}
           selectedScanId={selectedScanId}
@@ -235,10 +236,6 @@ export default function Chat() {
           loadingScans={loadingScans}
           loadingVulns={loadingVulns}
           onNewChat={handleNewChat}
-          sessions={sessions}
-          loadingSessions={loadingSessions}
-          activeSessionId={sessionId}
-          onSelectSession={handleSelectSession}
         />
 
         <div
@@ -307,6 +304,17 @@ export default function Chat() {
           </div>
         </div>
       </div>
+
+      {selectedScanId && (
+        <div style={{ marginTop: 24 }}>
+          <HistoryPanel
+            sessions={sessions}
+            loadingSessions={loadingSessions}
+            activeSessionId={sessionId}
+            onSelectSession={handleSelectSession}
+          />
+        </div>
+      )}
     </div>
   )
 }
